@@ -65,7 +65,7 @@ theano_rng=MRG_RandomStreams(rng.randint(2 ** 15))
 lasagne.random.set_rng(np.random.RandomState(rng.randint(2 ** 15)))
 
 # dataset
-data_dir='/home/chongxuan/mfs/data/mnist_real/mnist.pkl.gz'
+data_dir='./mnist.pkl.gz'
 # flags
 valid_flag=False 
 objective_flag = cfg['objective_flag'] # integrate y, argmax

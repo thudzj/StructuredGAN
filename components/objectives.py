@@ -135,3 +135,6 @@ def balance_constraint(p_l, t_l, p_u, norm_type=2, form='mean_class'):
 
     # res should be a vector with length number_class
     return res.norm(norm_type)
+
+def mean_squared_error(predictions, targets, n_z):
+    return lasagne.objectives.squared_error(predictions, targets).mean() * n_z / 2.0
