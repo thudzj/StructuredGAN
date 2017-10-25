@@ -66,7 +66,7 @@ batch_size=200
 batch_size_eval=200
 
 # pre-train C
-pre_num_epoch=20
+pre_num_epoch=50
 pre_lr=3e-4
 # C
 alpha_decay=1e-4
@@ -92,7 +92,7 @@ generation_scale=True
 z_generated=num_classes
 # evaluation
 vis_epoch=1
-eval_epoch=3
+eval_epoch=1
 
 
 '''
@@ -154,6 +154,7 @@ sym_y_m = T.ivector()
 sym_x_u_i = T.tensor4()
 sym_x_eval = T.tensor4()
 sym_lr = T.scalar()
+sym_unsup_weight = T.scalar()
 
 shared_unlabel = theano.shared(x_unlabelled, borrow=True)
 slice_x_u_d = T.ivector()
@@ -277,17 +278,17 @@ gen_cost_p_g_1 = bce(dis_out_p_g, T.ones(dis_out_p_g.shape)).mean() # G fools D
 
 disxz_cost_p = bce(disxz_out_p, T.ones(disxz_out_p.shape)).mean()
 disxz_cost_p_g = bce(disxz_out_p_g, T.zeros(disxz_out_p_g.shape)).mean()
-inf_cost_p_i = bce(disxz_out_p, T.zeros(disxz_out_p.shape)).mean() * 0.1
-gen_cost_p_g_2 = bce(disxz_out_p_g, T.ones(disxz_out_p_g.shape)).mean() * 0.1
+inf_cost_p_i = bce(disxz_out_p, T.zeros(disxz_out_p.shape)).mean()
+gen_cost_p_g_2 = bce(disxz_out_p_g, T.ones(disxz_out_p_g.shape)).mean()
 
 weight_decay_classifier = lasagne.regularization.regularize_layer_params_weighted({cla_layers[-1]:1}, lasagne.regularization.l2)
-cla_cost = categorical_crossentropy_ssl_separated(predictions_l=T.concatenate([cla_out_y_l, cla_out_y_m], axis=0)[:batch_size], targets=T.concatenate([sym_y, sym_y_m], axis=0)[:batch_size], predictions_u=cla_out_y_d, weight_decay=weight_decay_classifier, alpha_labeled=alpha_labeled, alpha_unlabeled=alpha_unlabeled_entropy, alpha_average=alpha_average, alpha_decay=alpha_decay)
-
 pretrain_cost = categorical_crossentropy_ssl_separated(predictions_l=cla_out_y_l, targets=sym_y, predictions_u=cla_out_y_d, weight_decay=weight_decay_classifier, alpha_labeled=alpha_labeled, alpha_unlabeled=alpha_unlabeled_entropy, alpha_average=alpha_average, alpha_decay=alpha_decay)
+cla_cost_g = sym_unsup_weight * categorical_crossentropy(cla_out_y_m, sym_y_m)
+cla_cost = pretrain_cost + cla_cost_g
 
 dis_cost = dis_cost_p + dis_cost_p_g
 disxz_cost = disxz_cost_p + disxz_cost_p_g
-rz = mean_squared_error(inf_z_g, sym_z_rand, n_z)
+rz = mean_squared_error(inf_z_g, sym_z_rand, n_z)*0.1
 ry = categorical_crossentropy(cla_out_y_g, sym_y_g)
 inf_cost = inf_cost_p_i + rz
 gen_cost = gen_cost_p_g_1 + gen_cost_p_g_2 + rz + ry
@@ -295,7 +296,7 @@ gen_cost = gen_cost_p_g_1 + gen_cost_p_g_2 + rz + ry
 dis_cost_list=[dis_cost + disxz_cost, dis_cost, dis_cost_p, dis_cost_p_g, disxz_cost, disxz_cost_p, disxz_cost_p_g]
 gen_cost_list=[gen_cost, gen_cost_p_g_1, gen_cost_p_g_2, rz, ry]
 inf_cost_list=[inf_cost, inf_cost_p_i, rz]
-cla_cost_list=[cla_cost]
+cla_cost_list=[cla_cost, pretrain_cost, cla_cost_g]
 
 # updates of D
 dis_params = ll.get_all_params(dis_layers, trainable=True) + ll.get_all_params(disxz_layers, trainable=True)
@@ -342,7 +343,7 @@ train_batch_gen = theano.function(inputs=[sym_y_g, sym_lr],
 train_batch_inf = theano.function(inputs=[slice_x_u_i, sym_y_g, sym_lr],
                                   outputs=inf_cost_list, updates=inf_updates,
                                   givens={sym_x_u_i: shared_unlabel[slice_x_u_i]})
-train_batch_cla = theano.function(inputs=[sym_x_l, sym_y, slice_x_u_d, sym_y_m, sym_z_m, sym_lr],
+train_batch_cla = theano.function(inputs=[sym_x_l, sym_y, slice_x_u_d, sym_y_m, sym_z_m, sym_lr, sym_unsup_weight],
                                   outputs=cla_cost_list, updates=cla_updates,
                                   givens={sym_x_u_d: shared_unlabel[slice_x_u_d]})
 
@@ -399,6 +400,9 @@ for epoch in range(1, 1+pre_num_epoch):
 train and evaluate
 '''
 print 'Start training'
+batch_l = 200
+batch_c = 1
+batch_g = 1
 for epoch in range(1, 1+num_epochs):
     start = time.time()
 
@@ -409,15 +413,19 @@ for epoch in range(1, 1+num_epochs):
     p_u_d = rng.permutation(x_unlabelled.shape[0]).astype('int32')
     p_u_i = rng.permutation(x_unlabelled.shape[0]).astype('int32')
 
-    if epoch < 500:
-        if epoch % 50 == 1: # 5, 10
-            batch_l = 200 - (epoch // 50 + 1) * 10
-            batch_c = (epoch // 50 + 1) * 10
-            batch_g = (epoch // 50 + 1) * 10
-    elif epoch < 1000 and epoch % 100 == 0:
-        batch_l = 150
-        batch_c = 45 - 5 * (epoch-500)//100
-        batch_g = 5 + 5 * (epoch-500)//100
+    if epoch < 110:
+        if epoch % 10 == 0: # 4, 8, 12, 16
+            batch_l = 200 - (epoch // 10) * 16
+            batch_c = (epoch // 10) * 16
+            batch_g = 1#(epoch // 50 + 1) * 10
+    elif epoch < 400:
+        batch_l = 40
+        batch_c = 160
+        batch_g = 1
+    else:
+        batch_l = 40
+        batch_c = 150
+        batch_g = 10
 
     dl = [0.] * len(dis_cost_list)
     gl = [0.] * len(gen_cost_list)
@@ -425,17 +433,18 @@ for epoch in range(1, 1+num_epochs):
     il = [0.] * len(inf_cost_list)
 
     if (epoch % eval_epoch == 0):
-        # 40 30 20 10 5
-        size_l = 200 - (epoch - 1) // 10
-        size_g = (epoch - 1) // 10 + 1
+        w_g = np.float32(max(min(float(epoch-100) / 30000.0, 0.02), 0.0))
+        size_l = 200
+        size_g = 200
+        size_u = 200
         for i in range(num_batches_u * eval_epoch):
             i_l = i % (x_labelled.shape[0] // size_l)
-            i_u = i % num_batches_u
+            i_u = i % (x_unlabelled.shape[0] // size_u)
 
             y_real = np.int32(np.random.randint(10, size=size_g))
             z_real = np.random.uniform(size=(size_g, n_z)).astype(np.float32)
 
-            cl_b = train_batch_cla(x_labelled[i_l*size_l:(i_l+1)*size_l], y_labelled[i_l*size_l:(i_l+1)*size_l], p_u_d[i_u*batch_size:(i_u+1)*batch_size], y_real, z_real, lr)
+            cl_b = train_batch_cla(x_labelled[i_l*size_l:(i_l+1)*size_l], y_labelled[i_l*size_l:(i_l+1)*size_l], p_u_d[i_u*size_u:(i_u+1)*size_u], y_real, z_real, lr, w_g)
 
             for j in xrange(len(cl)):
                 cl[j] += cl_b[j]
@@ -444,7 +453,7 @@ for epoch in range(1, 1+num_epochs):
                 p_l = rng.permutation(x_labelled.shape[0])
                 x_labelled = x_labelled[p_l]
                 y_labelled = y_labelled[p_l]
-            if i_u == (num_batches_u - 1):
+            if i_u == (x_unlabelled.shape[0] // size_u - 1):
                 p_u_d = rng.permutation(x_unlabelled.shape[0]).astype('int32')
 
         for i in xrange(len(cl)):
