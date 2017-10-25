@@ -94,11 +94,8 @@ def _init_inception():
 
 if softmax is None:
   _init_inception()
-  # data = np.load('../../triple-gan/generations-triplegan-cifar.npz')
-  # tgan_x, tgan_y = data['x'], data['y']
-  # tgan_x = ((tgan_x + 1)/2*255).astype(np.int)
 
-  data = np.load('../../triple-gan/generations-swgan-inc-50000.npz')
+  data = np.load('../../generations-wgan-inc-50000.npz')
   sgan_x, sgan_y = data['x'], data['y']
   sgan_x = ((sgan_x + 1)/2*255).astype(np.int)
   print(sgan_x.shape)
