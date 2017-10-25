@@ -1,6 +1,3 @@
-'''
-This code implements a triple GAN for semi-supervised learning on SVHN
-'''
 import os, time, argparse, shutil
 
 import numpy as np
@@ -129,7 +126,7 @@ if True:
     print 'Size of training data', x_labelled.shape[0], x_unlabelled.shape[0]
     y_order = np.argsort(y_labelled)
     _x_mean = x_labelled[y_order]
-    image = paramgraphics.mat_to_img(_x_mean.T, dim_input, tile_shape=(num_classes, num_labelled/num_classes), colorImg=colorImg, scale=generation_scale, save_path=os.path.join(outfolder, 'x_l_'+str(ssl_data_seed)+'_triple-gan.png'))
+    image = paramgraphics.mat_to_img(_x_mean.T, dim_input, tile_shape=(num_classes, num_labelled/num_classes), colorImg=colorImg, scale=generation_scale, save_path=os.path.join(outfolder, 'x_l_'+str(ssl_data_seed)+'_sgan.png'))
 
 num_batches_l = x_labelled.shape[0] / batch_size
 num_batches_u = x_unlabelled.shape[0] / batch_size
