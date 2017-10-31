@@ -285,7 +285,7 @@ cla_cost = pretrain_cost + cla_cost_g
 
 dis_cost = dis_cost_p + dis_cost_p_g
 disxz_cost = disxz_cost_p + disxz_cost_p_g
-rz = mean_squared_error(inf_z_g, sym_z_rand, n_z)*0.1
+rz = mean_squared_error(inf_z_g, sym_z_rand, n_z)
 ry = categorical_crossentropy(cla_out_y_g, sym_y_g)
 inf_cost = inf_cost_p_i + rz
 gen_cost = gen_cost_p_g_1 + gen_cost_p_g_2 + rz + ry
@@ -430,7 +430,7 @@ for epoch in range(1, 1+num_epochs):
     il = [0.] * len(inf_cost_list)
 
     if (epoch % eval_epoch == 0):
-        w_g = np.float32(max(min(float(epoch-100) / 30000.0, 0.02), 0.0))
+        w_g = np.float32(max(min(float(epoch-100) / 30000.0, 0.025), 0.0))
         size_l = 200
         size_g = 200
         size_u = 200
